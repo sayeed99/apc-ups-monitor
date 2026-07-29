@@ -1,0 +1,31 @@
+Source: apc-ups-monitor
+Section: admin
+Priority: optional
+Maintainer: Sayeed Afridi <sayeed.afridi2009@gmail.comm>
+Build-Depends: debhelper (>= 10), python3-setuptools, python3-all, dh-python
+Standards-Version: 4.5.0
+Homepage: https://github.com/sayeed99/apc-ups-monitor
+Vcs-Git: https://github.com/sayeed99/apc-ups-monitor.git
+Vcs-Browser: https://github.com/sayeed99/apc-ups-monitor
+
+Package: apc-ups-monitor
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3 (>= 3.8), apcupsd, apcupsd-cgi
+Recommends: nginx, apache2
+Suggests: apc-ups-monitor-doc
+Description: APC UPS monitoring system with web interface
+ APC UPS Monitor provides real-time monitoring, historical data logging, and
+ a modern web interface for APC uninterruptible power supplies managed by
+ apcupsd.
+ .
+ Features include:
+  - Real-time UPS status monitoring
+  - Historical data collection and charting
+  - Battery performance tracking
+  - Event logging and alerting
+  - Web-based dashboard
+  - REST API for integration
+  - WebSocket support for real-time updates
+ .
+ This package provides the complete UPS monitoring system including
+ the backend service and web interface.

@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPS Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Keep the realtime client local: the monitor must also work without Internet access. -->
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --bg-card: #0c0c0c;
+            --bg-muted: #1f1f1f;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border: #27272a;
+            --border-muted: #3f3f46;
+            --accent: #8b5cf6;
+            --accent-hover: #7c3aed;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .font-mono {
+            font-family: 'Geist Mono', 'Courier New', monospace;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-muted);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--text-muted);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+        
+        /* Card styles */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .bg-card {
+            background-color: var(--bg-card);            
+        }
+        
+        .card-header {
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .card-description {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        
+        /* Badge styles */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 4px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .badge-default {
+            background-color: var(--bg-muted);
+            color: var(--text-secondary);
+        }
+        
+        .badge-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        
+        .badge-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+        
+        .badge-error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        
+        .badge-info {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--info);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        /* Button styles */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+        }
+        
+        .btn-secondary {
+            background-color: var(--bg-muted);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--bg-secondary);
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-outline:hover:not(:disabled) {
+            background-color: var(--bg-muted);
+        }
+        
+        .btn-ghost {
+            background-color: transparent;
+            color: var(--text-secondary);
+        }
+        
+        .btn-ghost:hover:not(:disabled) {
+            background-color: var(--bg-muted);
+            color: var(--text-primary);
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+        }
+        
+        .btn-lg {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+        }
+        
+        /* Progress bar styles */
+        .progress {
+            background-color: var(--bg-muted);
+            border-radius: 4px;
+            overflow: hidden;
+            height: 8px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        
+        .progress-success {
+            background-color: var(--success);
+        }
+        
+        .progress-warning {
+            background-color: var(--warning);
+        }
+        
+        .progress-error {
+            background-color: var(--error);
+        }
+        
+        /* Tab styles */
+        .tabs {
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+        }
+        
+        .tabs-list {
+            display: flex;
+            gap: 0;
+        }
+        
+        .tab-trigger {
+            background: none;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .tab-trigger:hover {
+            color: var(--text-secondary);
+        }
+        
+        .tab-trigger.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Alert styles */
+        .alert {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-error {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+        }
+        
+        .alert-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+        
+        .alert-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+        
+        .alert-info {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.2);
+            color: var(--info);
+        }
+        
+        /* Input styles */
+        .input, .select {
+            background-color: var(--bg-muted);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+        
+        .input:focus, .select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+        }
+        
+        /* Utility classes */
+        .text-xs { font-size: 0.75rem; }
+        .text-sm { font-size: 0.875rem; }
+        .text-base { font-size: 1rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; }
+        
+        .font-medium { font-weight: 500; }
+        .font-semibold { font-weight: 600; }
+        .font-bold { font-weight: 700; }
+        
+        .text-muted { color: var(--text-muted); }
+        .text-secondary { color: var(--text-secondary); }
+        .text-primary { color: var(--text-primary); }
+        .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); }
+        .text-error { color: var(--error); }
+        .text-info { color: var(--info); }
+        
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .items-start { align-items: flex-start; }
+        .justify-center { justify-content: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-end { justify-content: flex-end; }
+        
+        .gap-1 { gap: 0.25rem; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+        .gap-8 { gap: 2rem; }
+        
+        .grid { display: grid; }
+        .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mb-8 { margin-bottom: 2rem; }
+        
+        .p-4 { padding: 1rem; }
+        .p-6 { padding: 1.5rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        
+        .rounded { border-radius: 0.375rem; }
+        .rounded-md { border-radius: 0.375rem; }
+        .rounded-lg { border-radius: 0.5rem; }
+        
+        .hidden { display: none; }
+        .block { display: block; }
+        .inline { display: inline; }
+        .inline-block { display: inline-block; }
+        
+        .w-4 { width: 1rem; }
+        .w-5 { width: 1.25rem; }
+        .w-6 { width: 1.5rem; }
+        .h-4 { height: 1rem; }
+        .h-5 { height: 1.25rem; }
+        .h-6 { height: 1.5rem; }
+        .h-8 { height: 2rem; }
+        .h-64 { height: 16rem; }
+        .h-80 { height: 20rem; }
+        
+        .max-w-7xl { max-width: 80rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        
+        .space-y-1 > * + * { margin-top: 0.25rem; }
+        .space-y-2 > * + * { margin-top: 0.5rem; }
+        .space-y-3 > * + * { margin-top: 0.75rem; }
+        .space-y-4 > * + * { margin-top: 1rem; }
+        .space-y-6 > * + * { margin-top: 1.5rem; }
+        
+        .overflow-hidden { overflow: hidden; }
+        .overflow-y-auto { overflow-y: auto; }
+        .max-h-80 { max-height: 20rem; }
+        
+        .transition-all { transition: all 0.2s ease; }
+        
+        .min-h-screen { min-height: 100vh; }
+        
+        .container {
+            max-width: 80rem;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-online { background-color: var(--success); }
+        .status-battery { background-color: var(--warning); }
+        .status-offline { background-color: var(--error); }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .grid-cols-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid-cols-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .tabs-list {
+                flex-wrap: wrap;
+            }
+            
+            .tab-trigger {
+                padding: 0.5rem 1rem;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-3xl font-bold flex items-center gap-3">
+                    <i data-lucide="zap" class="w-8 h-8 text-warning"></i>
+                    APC UPS Monitor
+                </h1>
+                <p class="text-muted mt-1">
+                    <span id="ups-name">Loading...</span> 
+                    <span id="ups-model" class="font-mono text-sm"></span>
+                </p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="status-dot" id="connection-dot"></span>
+                    <span class="text-sm text-muted" id="connection-status">Connecting...</span>
+                </div>
+                <span class="text-xs text-muted font-mono" id="api-url">Auto-detected</span>
+                <button class="btn btn-ghost btn-sm" id="settings-btn">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
+                <button class="btn btn-ghost btn-sm" id="refresh-btn">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="card mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="badge" id="status-badge">
+                            <i data-lucide="activity" class="w-3 h-3 mr-1"></i>
+                            <span id="status-text">Unknown</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2 text-sm">
+                        <i data-lucide="battery" class="w-4 h-4 text-success"></i>
+                        <span id="header-battery">0%</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <i data-lucide="zap" class="w-4 h-4 text-warning"></i>
+                        <span id="header-load">0%</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <i data-lucide="thermometer" class="w-4 h-4 text-info"></i>
+                        <span id="header-temp">0°C</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end mt-2">
+                <span class="text-xs text-muted">Last updated: <span id="last-updated">Never</span></span>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div id="alerts-container" class="mb-6"></div>
+
+        <!-- Main Content Tabs -->
+        <div class="tabs">
+            <div class="tabs-list">
+                <button class="tab-trigger active" data-tab="overview">Overview</button>
+                <button class="tab-trigger" data-tab="charts">Charts</button>
+                <button class="tab-trigger" data-tab="historic">Historic Data</button>
+                <button class="tab-trigger" data-tab="battery">Battery</button>
+                <button class="tab-trigger" data-tab="events">Events</button>
+                <button class="tab-trigger" data-tab="system">System</button>
+                <button class="tab-trigger" data-tab="config">Configuration</button>
+            </div>
+        </div>
+
+        <!-- Overview Tab -->
+        <div class="tab-content active" id="overview-tab">
+            <div class="grid grid-cols-3 gap-6">
+                <!-- Battery Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="battery" class="w-5 h-5 text-success"></i>
+                            Battery Status
+                        </h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>Charge Level</span>
+                                <span id="battery-charge-percent">0%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-success" id="battery-progress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Time Remaining</span>
+                                <p class="font-semibold" id="time-remaining">0 min</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Battery Voltage</span>
+                                <p class="font-semibold" id="battery-voltage">0.0V</p>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-muted text-sm">Battery Install Date</span>
+                            <p class="font-semibold" id="battery-install-date">Unknown</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Power Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="zap" class="w-5 h-5 text-warning"></i>
+                            Power Status
+                        </h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>Load</span>
+                                <span id="load-percent">0%</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-warning" id="load-progress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Input Voltage</span>
+                                <p class="font-semibold" id="input-voltage">0.0V</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Output Voltage</span>
+                                <p class="font-semibold" id="output-voltage">0.0V</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Frequency</span>
+                                <p class="font-semibold" id="frequency">0.0Hz</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Voltage Range</span>
+                                <p class="font-semibold text-xs" id="voltage-range">0V - 0V</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="info" class="w-5 h-5 text-info"></i>
+                            System Info
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Model</span>
+                                <p class="font-semibold font-mono text-xs" id="system-model">Unknown</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Firmware</span>
+                                <p class="font-semibold font-mono text-xs" id="system-firmware">Unknown</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Serial Number</span>
+                                <p class="font-semibold font-mono text-xs" id="system-serial">Unknown</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Temperature</span>
+                                <p class="font-semibold" id="system-temperature">0°C</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-muted">Transfers</span>
+                                <p class="font-semibold" id="system-transfers">0</p>
+                            </div>
+                            <div>
+                                <span class="text-muted">Last Transfer</span>
+                                <p class="font-semibold text-xs" id="system-last-transfer">None</p>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-muted text-sm">Self Test</span>
+                            <div class="mt-1">
+                                <span class="badge badge-success" id="self-test-badge">OK</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Tab -->
+        <div class="tab-content" id="charts-tab">
+            <div class="card mb-6">
+                <div class="card-header">
+                    <div class="flex items-center justify-between">
+                        <h3 class="card-title">Real-Time Charts (Last 2 Hours)</h3>
+                        <div class="flex items-center gap-4">
+                            <button class="btn btn-primary" id="refresh-charts">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <!-- Battery Charge Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="battery" class="w-5 h-5 text-success"></i>
+                            Battery Charge Over Time
+                        </h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="battery-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Load Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="zap" class="w-5 h-5 text-info"></i>
+                            Load Percentage
+                        </h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="load-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Voltage Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="activity" class="w-5 h-5 text-warning"></i>
+                            Line Voltage
+                        </h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="voltage-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Temperature Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="thermometer" class="w-5 h-5 text-error"></i>
+                            Temperature
+                        </h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historic Data Tab -->
+        <div class="tab-content" id="historic-tab">
+            <div class="card mb-6">
+                <div class="card-header">
+                    <div class="flex items-center justify-between">
+                        <h3 class="card-title">Historic Data</h3>
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm">From:</label>
+                                <input type="datetime-local" id="historic-date-from" class="input" style="width: auto;">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm">To:</label>
+                                <input type="datetime-local" id="historic-date-to" class="input" style="width: auto;">
+                            </div>
+                            <button class="btn btn-primary" id="filter-historic-data">
+                                <i data-lucide="filter" class="w-4 h-4"></i>
+                                Filter
+                            </button>
+                            <button class="btn btn-secondary" id="export-historic-data">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Data Table</h3>
+                    <p class="card-description">Showing <span id="historic-record-count">0</span> records</p>
+                </div>
+                <div class="max-h-80 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0 bg-card border-b border-border">
+                            <tr>
+                                <th class="text-left py-3 px-4">Timestamp</th>
+                                <th class="text-left py-3 px-4">Status</th>
+                                <th class="text-left py-3 px-4">Battery (%)</th>
+                                <th class="text-left py-3 px-4">Load (%)</th>
+                                <th class="text-left py-3 px-4">Input Voltage</th>
+                                <th class="text-left py-3 px-4">Output Voltage</th>
+                                <th class="text-left py-3 px-4">Temperature</th>
+                                <th class="text-left py-3 px-4">Time Left</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historic-data-table-body">
+                            <!-- Historic data rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex items-center justify-between pt-4 border-t border-border">
+                    <div class="flex items-center gap-2 text-sm text-muted">
+                        <span>Rows per page:</span>
+                        <select class="select" id="historic-rows-per-page" style="width: auto;">
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                            <option value="250">250</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="btn btn-ghost btn-sm" id="historic-prev-page" disabled>
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            Previous
+                        </button>
+                        <span class="text-sm text-muted" id="historic-page-info">Page 1 of 1</span>
+                        <button class="btn btn-ghost btn-sm" id="historic-next-page" disabled>
+                            Next
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battery Tab -->
+        <div class="tab-content" id="battery-tab">
+            <div class="grid grid-cols-3 gap-6 mb-6">
+                <!-- Battery Performance -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="gauge" class="w-5 h-5 text-success"></i>
+                            Battery Performance
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Total Events</span>
+                            <span class="font-semibold" id="battery-total-events">0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Avg Duration</span>
+                            <span class="font-semibold" id="battery-avg-duration">0 min</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Avg Drain Rate</span>
+                            <span class="font-semibold" id="battery-avg-drain">0%/hour</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Max Drain Rate</span>
+                            <span class="font-semibold text-warning" id="battery-max-drain">0%/hour</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Usage Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="bar-chart" class="w-5 h-5 text-info"></i>
+                            Usage Statistics
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Total Battery Time</span>
+                            <span class="font-semibold" id="battery-total-time">0 hours</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Avg % Drained</span>
+                            <span class="font-semibold" id="battery-avg-drained">0%</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-muted">Min Drain Rate</span>
+                            <span class="font-semibold text-success" id="battery-min-drain">0%/hour</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Power Issues -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="alert-triangle" class="w-5 h-5 text-warning"></i>
+                            Power Issues
+                        </h3>
+                    </div>
+                    <div class="space-y-2" id="power-issues">
+                        <!-- Power issue breakdown will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Battery Events -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Battery Events</h3>
+                </div>
+                <div class="max-h-80 overflow-y-auto space-y-2" id="battery-events">
+                    <!-- Battery events will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Events Tab -->
+        <div class="tab-content" id="events-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Events & Alerts</h3>
+                </div>
+                <div class="max-h-80 overflow-y-auto space-y-2" id="system-events">
+                    <!-- System events will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- System Tab -->
+        <div class="tab-content" id="system-tab">
+            <div class="grid grid-cols-3 gap-6">
+                <!-- System Information -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="server" class="w-5 h-5 text-info"></i>
+                            System Information
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="text-sm">
+                            <span class="text-muted">UPS Name</span>
+                            <p class="font-semibold font-mono" id="detailed-ups-name">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Model</span>
+                            <p class="font-semibold font-mono" id="detailed-model">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Serial Number</span>
+                            <p class="font-semibold font-mono" id="detailed-serial">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Firmware</span>
+                            <p class="font-semibold font-mono" id="detailed-firmware">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Driver</span>
+                            <p class="font-semibold font-mono" id="detailed-driver">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Hostname</span>
+                            <p class="font-semibold font-mono" id="detailed-hostname">Unknown</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Start Time</span>
+                            <p class="font-semibold" id="detailed-start-time">Unknown</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration & Thresholds -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="settings" class="w-5 h-5 text-warning"></i>
+                            Configuration & Thresholds
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="text-sm">
+                            <span class="text-muted">Min Battery Shutdown</span>
+                            <p class="font-semibold" id="min-battery-shutdown">0%</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Min Time Shutdown</span>
+                            <p class="font-semibold" id="min-time-shutdown">0 min</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Max Time on Battery</span>
+                            <p class="font-semibold" id="max-time-battery">0 min</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Low Battery Timeout</span>
+                            <p class="font-semibold" id="low-battery-timeout">0 min</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Required Return Charge</span>
+                            <p class="font-semibold" id="required-return-charge">0%</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Self Test Interval</span>
+                            <p class="font-semibold" id="self-test-interval">0 days</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Runtime & Transfer Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="activity" class="w-5 h-5 text-success"></i>
+                            Runtime & Transfer Statistics
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="text-sm">
+                            <span class="text-muted">Total Transfers</span>
+                            <p class="font-semibold" id="total-transfers">0</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Time on Battery</span>
+                            <p class="font-semibold" id="time-on-battery">0 min</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Cumulative Battery Time</span>
+                            <p class="font-semibold" id="cumulative-battery-time">0 min</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Nominal Output Voltage</span>
+                            <p class="font-semibold" id="nominal-output-voltage">0V</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Nominal Battery Voltage</span>
+                            <p class="font-semibold" id="nominal-battery-voltage">0V</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">External Batteries</span>
+                            <p class="font-semibold" id="external-batteries">0</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Transfer Voltage Range</span>
+                            <p class="font-semibold text-xs" id="transfer-voltage-range">0V - 0V</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configuration Tab -->
+        <div class="tab-content" id="config-tab">
+            <div class="grid grid-cols-2 gap-6">
+                <!-- apcupsd Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="power" class="w-5 h-5 text-info"></i>
+                            apcupsd Status
+                        </h3>
+                    </div>
+                    <div class="space-y-3" id="apcupsd-status">
+                        <div class="text-sm">
+                            <span class="text-muted">Installation Status</span>
+                            <p class="font-semibold" id="apcupsd-installed">Checking...</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Configuration Status</span>
+                            <p class="font-semibold" id="apcupsd-configured">Checking...</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Service Status</span>
+                            <p class="font-semibold" id="apcupsd-active">Checking...</p>
+                        </div>
+                        <div class="text-sm">
+                            <span class="text-muted">Auto-start</span>
+                            <p class="font-semibold" id="apcupsd-enabled">Checking...</p>
+                        </div>
+                        <div class="flex gap-2 mt-4">
+                            <button id="install-apcupsd" class="btn btn-primary btn-sm">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                                Install apcupsd
+                            </button>
+                            <button id="restart-apcupsd" class="btn btn-secondary btn-sm">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                Restart Service
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Device Detection -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="search" class="w-5 h-5 text-warning"></i>
+                            UPS Device Detection
+                        </h3>
+                    </div>
+                    <div class="space-y-3">
+                        <button id="detect-devices" class="btn btn-secondary w-full">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                            Detect UPS Devices
+                        </button>
+                        <div id="detected-devices" class="space-y-2">
+                            <!-- Detected devices will appear here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- UPS Configuration -->
+                <div class="card col-span-2">
+                    <div class="card-header">
+                        <h3 class="card-title flex items-center gap-2">
+                            <i data-lucide="settings" class="w-5 h-5 text-success"></i>
+                            UPS Configuration
+                        </h3>
+                    </div>
+                    <div id="ups-config-form" class="space-y-6">
+                        <!-- Basic Configuration -->
+                        <div class="border border-border rounded-lg p-4">
+                            <h4 class="font-semibold mb-4">Basic Configuration</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">UPS Name</label>
+                                    <input id="config-upsname" type="text" class="input" placeholder="UPS" value="UPS">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Cable Type</label>
+                                    <select id="config-upscable" class="input">
+                                        <option value="usb">USB</option>
+                                        <option value="smart">Smart</option>
+                                        <option value="simple">Simple</option>
+                                        <option value="ether">Ethernet</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">UPS Type</label>
+                                    <select id="config-upstype" class="input">
+                                        <option value="usb">USB</option>
+                                        <option value="apcsmart">APC Smart</option>
+                                        <option value="net">Network</option>
+                                        <option value="snmp">SNMP</option>
+                                        <option value="dumb">Dumb</option>
+                                        <option value="pcnet">PC Network</option>
+                                        <option value="modbus">Modbus</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Device Path</label>
+                                    <input id="config-device" type="text" class="input" placeholder="Leave empty for auto-detection">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Power Management -->
+                        <div class="border border-border rounded-lg p-4">
+                            <h4 class="font-semibold mb-4">Power Management</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Battery Level (%)</label>
+                                    <input id="config-batterylevel" type="number" class="input" min="1" max="100" value="5">
+                                    <small class="text-muted">Shutdown when battery reaches this level</small>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Runtime (minutes)</label>
+                                    <input id="config-minutes" type="number" class="input" min="1" max="60" value="3">
+                                    <small class="text-muted">Shutdown when runtime reaches this value</small>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">On Battery Delay (seconds)</label>
+                                    <input id="config-onbatterydelay" type="number" class="input" min="0" max="300" value="6">
+                                    <small class="text-muted">Delay before considering power failure</small>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Timeout (seconds)</label>
+                                    <input id="config-timeout" type="number" class="input" min="0" max="86400" value="0">
+                                    <small class="text-muted">Shutdown timeout (0 = disabled)</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Network Settings -->
+                        <div class="border border-border rounded-lg p-4">
+                            <h4 class="font-semibold mb-4">Network Settings</h4>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Network Server</label>
+                                    <select id="config-netserver" class="input">
+                                        <option value="on">Enabled</option>
+                                        <option value="off">Disabled</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Network IP</label>
+                                    <input id="config-nisip" type="text" class="input" value="127.0.0.1">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Network Port</label>
+                                    <input id="config-nisport" type="number" class="input" min="1024" max="65535" value="3551">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button id="save-config" class="btn btn-primary">
+                                <i data-lucide="save" class="w-4 h-4"></i>
+                                Save Configuration
+                            </button>
+                            <button id="reset-config" class="btn btn-secondary">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                Reset to Defaults
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="card max-w-md w-full mx-4">
+            <div class="card-header">
+                <div class="flex items-center justify-between">
+                    <h3 class="card-title">Settings</h3>
+                    <button class="btn btn-ghost btn-sm" id="close-settings">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Connection Status</label>
+                    <div class="p-3 bg-muted rounded">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="status-dot status-online"></span>
+                            <span class="font-medium">Auto-configured</span>
+                        </div>
+                        <p class="text-sm text-muted">API URL: <span id="settings-api-url" class="font-mono"></span></p>
+                        <p class="text-sm text-muted mt-1">URLs are automatically detected from the current page</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="save-settings" class="btn btn-primary flex-1">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

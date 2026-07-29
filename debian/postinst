@@ -1,0 +1,196 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+    configure)
+        # Create apc-ups-monitor user if it doesn't exist
+        if ! getent passwd apc-ups-monitor >/dev/null 2>&1; then
+            adduser --system --group --home /var/lib/apc-ups-monitor --no-create-home \
+                --gecos "APC UPS Monitor Service" --shell /bin/false apc-ups-monitor
+        fi
+        
+        # Create required directories
+        mkdir -p /var/lib/apc-ups-monitor
+        mkdir -p /var/log/apc-ups-monitor
+        mkdir -p /etc/apc-ups-monitor
+        
+        # Set ownership and permissions
+        chown -R apc-ups-monitor:apc-ups-monitor /var/lib/apc-ups-monitor
+        chown -R apc-ups-monitor:apc-ups-monitor /var/log/apc-ups-monitor
+        chown -R apc-ups-monitor:apc-ups-monitor /etc/apc-ups-monitor
+        chmod 755 /var/lib/apc-ups-monitor
+        chmod 755 /var/log/apc-ups-monitor
+        chmod 755 /etc/apc-ups-monitor
+        
+        # Setup sudo permissions for configuration management
+        # This allows the web interface to update apcupsd configuration
+        echo "Setting up sudo permissions for UPS configuration management..."
+        
+        # Get the user who installed the package (if available)
+        if [ -n "$SUDO_USER" ]; then
+            INSTALL_USER="$SUDO_USER"
+        elif [ -n "$LOGNAME" ] && [ "$LOGNAME" != "root" ]; then
+            INSTALL_USER="$LOGNAME"
+        else
+            # Fall back to the first non-system user (UID >= 1000)
+            INSTALL_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 { print $1; exit }')
+        fi
+        
+        if [ -n "$INSTALL_USER" ]; then
+            echo "Setting up sudo permissions for user: $INSTALL_USER"
+            
+            # Create sudoers file for UPS Monitor
+            SUDOERS_FILE="/etc/sudoers.d/apc-ups-monitor"
+            
+            cat > "$SUDOERS_FILE" << EOF
+# UPS Monitor sudo permissions
+# Allows the UPS Monitor application to manage apcupsd configuration and services
+
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/apt-get update
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/apt-get install -y apcupsd apcupsd-cgi
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/cp /tmp/*.conf /etc/apcupsd/apcupsd.conf
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/cp /etc/apcupsd/apcupsd.conf /etc/apcupsd/apcupsd.conf.backup
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/cp /tmp/*.default /etc/default/apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/chmod 644 /etc/apcupsd/apcupsd.conf
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/chmod 644 /etc/default/apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/chown root\:root /etc/apcupsd/apcupsd.conf
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/chown root\:root /etc/default/apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/systemctl daemon-reload
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/systemctl enable apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/systemctl restart apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/systemctl start apcupsd
+$INSTALL_USER ALL=(root) NOPASSWD: /bin/systemctl stop apcupsd
+EOF
+            
+            # Set proper permissions on sudoers file
+            chmod 440 "$SUDOERS_FILE"
+            
+            # Validate sudoers file
+            if visudo -c -f "$SUDOERS_FILE"; then
+                echo "✓ Sudo permissions configured for user: $INSTALL_USER"
+            else
+                echo "✗ Error: Invalid sudoers file created, removing..."
+                rm -f "$SUDOERS_FILE"
+            fi
+        else
+            echo "Warning: Could not determine installing user for sudo permissions."
+            echo "You may need to run the configuration setup manually."
+        fi
+        
+        # Create default configuration if it doesn't exist
+        if [ ! -f /etc/apc-ups-monitor/config.conf ]; then
+            cat > /etc/apc-ups-monitor/config.conf << 'EOF'
+# UPS Monitor Configuration
+[DEFAULT]
+host = 0.0.0.0
+port = 8555
+debug = false
+log_level = INFO
+db_path = /var/lib/apc-ups-monitor/ups_monitoring.db
+
+[database]
+# Database connection pool settings
+pool_size = 5
+cache_timeout = 30
+monitor_interval = 5
+batch_size = 100
+
+[monitoring]
+# UPS monitoring settings
+use_mock_data = false
+apcaccess_timeout = 5
+websocket_emit_interval = 2
+
+[apcupsd]
+# apcupsd configuration
+auto_configure = true
+auto_detect_devices = true
+config_backup = true
+EOF
+            chown apc-ups-monitor:apc-ups-monitor /etc/apc-ups-monitor/config.conf
+            chmod 644 /etc/apc-ups-monitor/config.conf
+        fi
+        
+        # Configure apcupsd if it's installed but not configured
+        if [ -f /usr/bin/apcupsd ] && [ ! -f /etc/default/apcupsd ] || ! grep -q "ENABLED=yes" /etc/default/apcupsd 2>/dev/null; then
+            echo "Configuring apcupsd..."
+            
+            # Enable apcupsd
+            echo "ENABLED=yes" > /etc/default/apcupsd
+            
+            # Create basic apcupsd configuration if it doesn't exist
+            if [ ! -f /etc/apcupsd/apcupsd.conf ]; then
+                cat > /etc/apcupsd/apcupsd.conf << 'EOF'
+# apcupsd.conf v1.1
+# Generated by UPS Monitor
+
+# UPS Identification
+UPSNAME UPS
+UPSCABLE usb
+UPSTYPE usb
+DEVICE
+
+# System Settings
+LOCKFILE /var/lock/apcupsd
+SCRIPTDIR /etc/apcupsd
+PWRFAILDIR /etc/apcupsd
+NOLOGINDIR /etc
+
+# Power Management
+ONBATTERYDELAY 6
+BATTERYLEVEL 5
+MINUTES 3
+TIMEOUT 0
+
+# Network Settings
+NETSERVER on
+NISIP 127.0.0.1
+NISPORT 3551
+
+# Logging
+EVENTSFILE /var/log/apcupsd.events
+EVENTSFILEMAX 10
+STATFILE /var/log/apcupsd.status
+LOGSTATS off
+
+# Advanced
+ANNOY 300
+ANNOYDELAY 60
+NOLOGON disable
+KILLDELAY 0
+UPSCLASS standalone
+UPSMODE disable
+STATTIME 0
+DATATIME 0
+EOF
+            fi
+            
+            # Enable and start apcupsd
+            systemctl daemon-reload
+            systemctl enable apcupsd
+            systemctl start apcupsd || true
+        fi
+        
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable apc-ups-monitor.service
+        
+        # Start the service if it's not already running
+        if ! systemctl is-active --quiet apc-ups-monitor.service; then
+            systemctl start apc-ups-monitor.service
+        fi
+        ;;
+    
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

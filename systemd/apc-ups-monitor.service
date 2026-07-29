@@ -1,0 +1,50 @@
+[Unit]
+Description=UPS Monitor Service
+Documentation=https://github.com/sayeed99/apc-ups-monitor
+After=network.target network-online.target
+Wants=network-online.target
+Wants=apcupsd.service
+
+[Service]
+Type=simple
+User=apc-ups-monitor
+Group=apc-ups-monitor
+WorkingDirectory=/var/lib/apc-ups-monitor
+ExecStart=/usr/bin/apc-ups-monitor --host=0.0.0.0 --port=8555 --db-path=/var/lib/apc-ups-monitor/ups_monitoring.db --log-level=INFO
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# Security settings - relaxed for WebSocket compatibility
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/apc-ups-monitor /var/log/apc-ups-monitor
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+# RestrictRealtime=true  # Disabled for WebSocket performance
+# RestrictNamespaces=true  # Disabled for WebSocket compatibility
+LockPersonality=true
+# MemoryDenyWriteExecute=true  # Disabled - may interfere with WebSocket libraries
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# SystemCallFilter=@system-service  # Disabled for WebSocket compatibility
+# SystemCallErrorNumber=EPERM  # Disabled for WebSocket compatibility
+
+# Environment
+Environment=PYTHONPATH=/usr/lib/python3/dist-packages
+Environment=UPS_MONITOR_DB_PATH=/var/lib/apc-ups-monitor/ups_monitoring.db
+Environment=UPS_MONITOR_LOG_PATH=/var/log/apc-ups-monitor
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=apc-ups-monitor
+
+[Install]
+WantedBy=multi-user.target

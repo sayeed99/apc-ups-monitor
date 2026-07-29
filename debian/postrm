@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+    purge)
+        # Remove user and group
+        if getent passwd apc-ups-monitor >/dev/null 2>&1; then
+            deluser apc-ups-monitor
+        fi
+        
+        # Remove data directory (but preserve database if user wants to keep it)
+        if [ -d /var/lib/apc-ups-monitor ]; then
+            echo "Database and data files are preserved in /var/lib/apc-ups-monitor"
+            echo "Remove manually if you want to delete all data"
+        fi
+        
+        # Remove log directory
+        if [ -d /var/log/apc-ups-monitor ]; then
+            rm -rf /var/log/apc-ups-monitor
+        fi
+        
+        # Remove configuration directory
+        if [ -d /etc/apc-ups-monitor ]; then
+            rm -rf /etc/apc-ups-monitor
+        fi
+        ;;
+    
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

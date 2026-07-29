@@ -1,0 +1,13 @@
+include README.md
+include requirements.txt
+include MANIFEST.in
+recursive-include templates *
+recursive-include static *
+recursive-include systemd *
+recursive-include debian *
+recursive-include scripts *
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *~
+global-exclude .git*
+global-exclude __pycache__
