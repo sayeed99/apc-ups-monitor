@@ -32,6 +32,7 @@ debian/*.substvars
 debian/*.debhelper
 debian/files
 debian/.debhelper/
+debian/debhelper-build-stamp
 
 # Database files
 *.db
