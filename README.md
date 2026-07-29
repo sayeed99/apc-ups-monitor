@@ -426,7 +426,7 @@ The system monitors:
    - Check browser console for JavaScript errors
 
 6. **Charts not displaying**:
-   - Ensure Chart.js CDN is accessible
+   - Reinstall the package if any local web assets are missing
    - Check browser console for errors
    - Verify historical data is available
 
@@ -438,6 +438,11 @@ For testing without a UPS, the system can use mock data:
 - Useful for development and testing
 
 ## Development
+
+The dashboard ships its complete browser runtime locally, including Tailwind,
+Chart.js, the date adapter, Lucide icons, Socket.IO, and Geist fonts. It does
+not require Internet access after installation. Third-party notices are kept
+in `static/vendor/THIRD_PARTY_NOTICES.md`.
 
 ### Project Structure
 

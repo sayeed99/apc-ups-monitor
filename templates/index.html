@@ -5,15 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UPS Monitor</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Keep the realtime client local: the monitor must also work without Internet access. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fonts.css') }}">
+    <!-- All browser dependencies are local so the monitor works without Internet access. -->
+    <script src="{{ url_for('static', filename='vendor/tailwind-browser-4.3.3.js') }}"></script>
     <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="{{ url_for('static', filename='vendor/chart.umd-4.5.1.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/chartjs-adapter-date-fns-3.0.0.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/lucide-1.27.0.js') }}"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
-        
         :root {
             --bg-primary: #0a0a0a;
             --bg-secondary: #1a1a1a;

@@ -29,11 +29,38 @@ class PackageAssetTests(unittest.TestCase):
     def test_socketio_client_is_local_and_packaged(self):
         template = (PACKAGE_ROOT / "templates/index.html").read_text()
         manifest = (PACKAGE_ROOT / "MANIFEST.in").read_text()
+        setup = (PACKAGE_ROOT / "setup.py").read_text()
 
         self.assertIn("filename='socket.io.min.js'", template)
         self.assertNotIn("cdn.socket.io", template)
         self.assertIn("recursive-include static *", manifest)
+        self.assertIn('"../static/vendor/fonts/*"', setup)
+        self.assertIn('"../static/vendor/licenses/*"', setup)
         self.assertGreater((PACKAGE_ROOT / "static/socket.io.min.js").stat().st_size, 40_000)
+
+    def test_all_browser_dependencies_are_local(self):
+        template = (PACKAGE_ROOT / "templates/index.html").read_text()
+        expected_assets = [
+            "vendor/tailwind-browser-4.3.3.js",
+            "vendor/chart.umd-4.5.1.min.js",
+            "vendor/chartjs-adapter-date-fns-3.0.0.bundle.min.js",
+            "vendor/lucide-1.27.0.js",
+            "vendor/fonts.css",
+        ]
+
+        self.assertNotIn("https://cdn.", template)
+        self.assertNotIn("https://fonts.googleapis.com", template)
+        for asset in expected_assets:
+            self.assertIn(asset, template)
+            self.assertTrue((PACKAGE_ROOT / "static" / asset).is_file())
+
+        fonts_css = (PACKAGE_ROOT / "static/vendor/fonts.css").read_text()
+        self.assertNotIn("http://", fonts_css)
+        self.assertNotIn("https://", fonts_css)
+        self.assertGreater(
+            (PACKAGE_ROOT / "static/vendor/fonts/geist-latin-wght-normal.woff2").stat().st_size,
+            20_000,
+        )
 
     def test_lucide_zap_favicon_is_local_and_packaged(self):
         template = (PACKAGE_ROOT / "templates/index.html").read_text()

@@ -11,7 +11,7 @@ vendor_wheels = glob.glob("vendor/*.whl")
 
 setup(
     name="apc-ups-monitor",
-    version="1.17.10",
+    version="1.17.11",
     description="APC UPS monitoring system with a real-time web interface",
     author="Sayeed Afridi",
     author_email="sayeed.afridi2009@gmail.comm",
@@ -22,7 +22,15 @@ setup(
     include_package_data=True,
     install_requires=[],
     package_data={
-        "apc_ups_monitor": ["../static/*", "../templates/*", "../systemd/*", "../vendor/*.whl"],
+        "apc_ups_monitor": [
+            "../static/*",
+            "../static/vendor/*",
+            "../static/vendor/fonts/*",
+            "../static/vendor/licenses/*",
+            "../templates/*",
+            "../systemd/*",
+            "../vendor/*.whl",
+        ],
     },
     data_files=[
         ("apc_ups_monitor/vendor", vendor_wheels),
