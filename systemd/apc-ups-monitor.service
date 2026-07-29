@@ -30,9 +30,10 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 # RestrictRealtime=true  # Disabled for WebSocket performance
 # RestrictNamespaces=true  # Disabled for WebSocket compatibility
-LockPersonality=true
+# LockPersonality and RestrictAddressFamilies are intentionally omitted because
+# systemd makes NoNewPrivileges effective when they are enabled, which prevents
+# the service's tightly scoped sudo commands from updating/restarting apcupsd.
 # MemoryDenyWriteExecute=true  # Disabled - may interfere with WebSocket libraries
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 # SystemCallFilter=@system-service  # Disabled for WebSocket compatibility
 # SystemCallErrorNumber=EPERM  # Disabled for WebSocket compatibility
 

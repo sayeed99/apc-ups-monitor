@@ -4,7 +4,7 @@ APC UPS Monitor Package
 A monitoring system for APC uninterruptible power supplies.
 """
 
-__version__ = "1.17.5"
+__version__ = "1.17.6"
 __author__ = "Sayeed Afridi"
 __email__ = "sayeed.afridi2009@gmail.comm"
 

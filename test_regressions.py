@@ -55,6 +55,8 @@ class PackageAssetTests(unittest.TestCase):
         self.assertNotIn("$INSTALL_USER ALL=", postinst)
         self.assertIn("NoNewPrivileges=false", service)
         self.assertIn("/etc/apcupsd /etc/default", service)
+        self.assertNotIn("\nLockPersonality=", service)
+        self.assertNotIn("\nRestrictAddressFamilies=", service)
 
     def test_config_writes_use_fixed_private_staging_files(self):
         backend = (PACKAGE_ROOT / "src/apcupsd_config.py").read_text()

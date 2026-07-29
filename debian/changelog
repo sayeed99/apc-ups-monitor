@@ -1,3 +1,10 @@
+apc-ups-monitor (1.17.6-1) unstable; urgency=high
+
+  * Remove systemd hardening directives that implicitly force NoNewPrivileges
+    and prevent the service's restricted sudo operations
+
+ -- Sayeed Afridi <sayeed.afridi2009@gmail.comm>  Wed, 29 Jul 2026 19:00:00 +0530
+
 apc-ups-monitor (1.17.5-1) unstable; urgency=high
 
   * Configure web-service privileges automatically during package installation
