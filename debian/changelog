@@ -1,3 +1,11 @@
+apc-ups-monitor (1.17.5-1) unstable; urgency=high
+
+  * Configure web-service privileges automatically during package installation
+  * Restrict configuration writes to service-owned staging files
+  * Allow the systemd service to run its tightly scoped privileged operations
+
+ -- Sayeed Afridi <sayeed.afridi2009@gmail.comm>  Wed, 29 Jul 2026 18:45:00 +0530
+
 apc-ups-monitor (1.17.4-1) unstable; urgency=high
 
   * Explicitly allow the intentional Werkzeug service runner with

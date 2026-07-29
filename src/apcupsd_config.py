@@ -19,6 +19,9 @@ class ApcupsdConfigManager:
     APCUPSD_CONF_PATH = "/etc/apcupsd/apcupsd.conf"
     APCUPSD_DEFAULT_PATH = "/etc/default/apcupsd"
     APCUPSD_BACKUP_PATH = "/etc/apcupsd/apcupsd.conf.backup"
+    STAGING_CONFIG_PATH = "/var/lib/apc-ups-monitor/staging/apcupsd.conf"
+    STAGING_DEFAULT_PATH = "/var/lib/apc-ups-monitor/staging/apcupsd.default"
+    SUDO = ["/usr/bin/sudo", "-n"]
     
     DEFAULT_CONFIG = {
         'UPSNAME': '',  # Will be commented out if empty
@@ -99,10 +102,10 @@ class ApcupsdConfigManager:
         
         try:
             # Update package lists using sudo
-            subprocess.run(['sudo', 'apt-get', 'update'], check=True)
+            subprocess.run(self.SUDO + ['/usr/bin/apt-get', 'update'], check=True)
             
             # Install apcupsd and apcupsd-cgi using sudo
-            subprocess.run(['sudo', 'apt-get', 'install', '-y', 'apcupsd', 'apcupsd-cgi'], 
+            subprocess.run(self.SUDO + ['/usr/bin/apt-get', 'install', '-y', 'apcupsd', 'apcupsd-cgi'],
                          check=True)
             
             self.is_installed = True
@@ -285,7 +288,7 @@ class ApcupsdConfigManager:
         if os.path.exists(self.APCUPSD_CONF_PATH):
             try:
                 # Use sudo to copy the config file
-                subprocess.run(['sudo', 'cp', self.APCUPSD_CONF_PATH, self.APCUPSD_BACKUP_PATH], 
+                subprocess.run(self.SUDO + ['/usr/bin/cp', self.APCUPSD_CONF_PATH, self.APCUPSD_BACKUP_PATH],
                              check=True)
                 logger.info(f"Backed up existing config to {self.APCUPSD_BACKUP_PATH}")
                 return True
@@ -299,46 +302,32 @@ class ApcupsdConfigManager:
     
     def write_config(self, config_content: str) -> Tuple[bool, str]:
         """Write apcupsd configuration file using sudo"""
-        import tempfile
         try:
             # Backup existing config
             if not self.backup_config():
                 return False, "Failed to backup existing configuration"
             
-            # Write to temporary file first
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.conf') as temp_file:
+            # The package creates this private, service-owned staging directory.
+            with open(self.STAGING_CONFIG_PATH, 'w') as temp_file:
                 temp_file.write(config_content)
-                temp_file_path = temp_file.name
-            
-            try:
-                # Use sudo to copy temp file to target location
-                subprocess.run(['sudo', 'cp', temp_file_path, self.APCUPSD_CONF_PATH], 
-                             check=True)
-                
-                # Set proper permissions using sudo
-                subprocess.run(['sudo', 'chmod', '644', self.APCUPSD_CONF_PATH], 
-                             check=True)
-                
-                # Set proper ownership (root:root)
-                subprocess.run(['sudo', 'chown', 'root:root', self.APCUPSD_CONF_PATH], 
-                             check=True)
-                
-                logger.info("Successfully wrote apcupsd configuration")
-                return True, "Configuration written successfully"
-                
-            finally:
-                # Clean up temporary file
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
+
+            subprocess.run(
+                self.SUDO + [
+                    '/usr/bin/install', '-o', 'root', '-g', 'root', '-m', '0644',
+                    self.STAGING_CONFIG_PATH, self.APCUPSD_CONF_PATH
+                ],
+                check=True
+            )
+
+            logger.info("Successfully wrote apcupsd configuration")
+            return True, "Configuration written successfully"
             
         except subprocess.CalledProcessError as e:
             if e.returncode == 1:  # Permission denied
                 error_msg = (
                     "Permission denied: Unable to write apcupsd configuration. "
-                    "Please run 'sudo ./scripts/setup-sudo-permissions.sh' to configure "
-                    "the required permissions for configuration management."
+                    "Reinstall or upgrade the APC UPS Monitor package to restore "
+                    "its service permissions."
                 )
             else:
                 error_msg = f"Failed to write configuration: {e}"
@@ -351,39 +340,26 @@ class ApcupsdConfigManager:
     
     def enable_apcupsd(self) -> Tuple[bool, str]:
         """Enable apcupsd service using sudo"""
-        import tempfile
         try:
             # Enable in /etc/default/apcupsd - use the standard format
             default_content = """# Defaults for apcupsd initscript (unused with systemd as init).
 # Set to "yes" to enable startup of apcupsd.
 ISCONFIGURED=yes
 """
-            # Write to temporary file first
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.default') as temp_file:
+            with open(self.STAGING_DEFAULT_PATH, 'w') as temp_file:
                 temp_file.write(default_content)
-                temp_file_path = temp_file.name
-            
-            try:
-                # Use sudo to copy temp file to target location
-                subprocess.run(['sudo', 'cp', temp_file_path, self.APCUPSD_DEFAULT_PATH], 
-                             check=True)
-                
-                # Set proper permissions and ownership
-                subprocess.run(['sudo', 'chmod', '644', self.APCUPSD_DEFAULT_PATH], 
-                             check=True)
-                subprocess.run(['sudo', 'chown', 'root:root', self.APCUPSD_DEFAULT_PATH], 
-                             check=True)
-                
-            finally:
-                # Clean up temporary file
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
+
+            subprocess.run(
+                self.SUDO + [
+                    '/usr/bin/install', '-o', 'root', '-g', 'root', '-m', '0644',
+                    self.STAGING_DEFAULT_PATH, self.APCUPSD_DEFAULT_PATH
+                ],
+                check=True
+            )
             
             # Reload systemd and enable service
-            subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
-            subprocess.run(['sudo', 'systemctl', 'enable', 'apcupsd'], check=True)
+            subprocess.run(self.SUDO + ['/usr/bin/systemctl', 'daemon-reload'], check=True)
+            subprocess.run(self.SUDO + ['/usr/bin/systemctl', 'enable', 'apcupsd'], check=True)
             
             self.is_configured = True
             logger.info("Successfully enabled apcupsd service")
@@ -393,8 +369,8 @@ ISCONFIGURED=yes
             if e.returncode == 1:  # Permission denied
                 error_msg = (
                     "Permission denied: Unable to enable apcupsd service. "
-                    "Please run 'sudo ./scripts/setup-sudo-permissions.sh' to configure "
-                    "the required permissions for service management."
+                    "Reinstall or upgrade the APC UPS Monitor package to restore "
+                    "its service permissions."
                 )
             else:
                 error_msg = f"Failed to enable apcupsd: {e}"
@@ -408,7 +384,7 @@ ISCONFIGURED=yes
     def restart_apcupsd(self) -> Tuple[bool, str]:
         """Restart apcupsd service using sudo"""
         try:
-            subprocess.run(['sudo', 'systemctl', 'restart', 'apcupsd'], check=True)
+            subprocess.run(self.SUDO + ['/usr/bin/systemctl', 'restart', 'apcupsd'], check=True)
             logger.info("Successfully restarted apcupsd service")
             return True, "apcupsd service restarted successfully"
             
@@ -416,8 +392,8 @@ ISCONFIGURED=yes
             if e.returncode == 1:  # Permission denied
                 error_msg = (
                     "Permission denied: Unable to restart apcupsd service. "
-                    "Please run 'sudo ./scripts/setup-sudo-permissions.sh' to configure "
-                    "the required permissions for service management."
+                    "Reinstall or upgrade the APC UPS Monitor package to restore "
+                    "its service permissions."
                 )
             else:
                 error_msg = f"Failed to restart apcupsd: {e}"

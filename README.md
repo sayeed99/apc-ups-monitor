@@ -77,21 +77,15 @@ automatic detection does not match the active device.
    ./scripts/install-local.sh
    ```
 
-### Setup sudo permissions for configuration management
+### Configuration management permissions
 
-If you want to use the web interface to configure apcupsd settings, you need to set up passwordless sudo permissions:
-
-```bash
-cd apc-ups-monitor
-sudo ./scripts/setup-sudo-permissions.sh
-```
-
-This script configures secure, limited sudo access for:
+Installing the `.deb` automatically configures secure, limited permissions for:
 - Installing apcupsd packages
 - Managing apcupsd configuration files
 - Controlling apcupsd service
 
-**Note**: This step is optional if you only want monitoring (read-only) functionality.
+No separate permission setup or login/logout is required. Source installations can
+use `sudo ./scripts/setup-sudo-permissions.sh` as a repair/setup tool.
 
 ### Complete removal
 

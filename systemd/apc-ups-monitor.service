@@ -18,13 +18,13 @@ TimeoutStopSec=30
 Restart=always
 RestartSec=5
 
-# Security settings - relaxed for WebSocket compatibility
-NoNewPrivileges=true
+# sudo is limited to the exact commands in /etc/sudoers.d/apc-ups-monitor.
+NoNewPrivileges=false
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/apc-ups-monitor /var/log/apc-ups-monitor
+ReadWritePaths=/var/lib/apc-ups-monitor /var/log/apc-ups-monitor /etc/apcupsd /etc/default
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

@@ -44,6 +44,27 @@ class PackageAssetTests(unittest.TestCase):
         main = (PACKAGE_ROOT / "src/main.py").read_text()
         self.assertIn("allow_unsafe_werkzeug=True", main)
 
+    def test_package_configures_privileges_for_service_account(self):
+        postinst = (PACKAGE_ROOT / "debian/postinst").read_text()
+        service = (PACKAGE_ROOT / "systemd/apc-ups-monitor.service").read_text()
+
+        self.assertIn(
+            "apc-ups-monitor ALL=(root) NOPASSWD: /usr/bin/systemctl restart apcupsd",
+            postinst,
+        )
+        self.assertNotIn("$INSTALL_USER ALL=", postinst)
+        self.assertIn("NoNewPrivileges=false", service)
+        self.assertIn("/etc/apcupsd /etc/default", service)
+
+    def test_config_writes_use_fixed_private_staging_files(self):
+        backend = (PACKAGE_ROOT / "src/apcupsd_config.py").read_text()
+        postinst = (PACKAGE_ROOT / "debian/postinst").read_text()
+
+        self.assertIn("/var/lib/apc-ups-monitor/staging/apcupsd.conf", backend)
+        self.assertIn("/var/lib/apc-ups-monitor/staging/apcupsd.default", backend)
+        self.assertNotIn("NamedTemporaryFile", backend)
+        self.assertNotIn("/tmp/*.conf", postinst)
+
 
 class ApcupsdDeviceTests(unittest.TestCase):
     def make_manager(self):
