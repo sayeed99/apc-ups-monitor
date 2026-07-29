@@ -11,11 +11,12 @@ vendor_wheels = glob.glob("vendor/*.whl")
 
 setup(
     name="apc-ups-monitor",
-    version="1.17.9",
+    version="1.17.10",
     description="APC UPS monitoring system with a real-time web interface",
     author="Sayeed Afridi",
     author_email="sayeed.afridi2009@gmail.comm",
     url="https://github.com/sayeed99/apc-ups-monitor",
+    license="MIT",
     packages=["apc_ups_monitor"],
     package_dir={"apc_ups_monitor": "src"},
     include_package_data=True,

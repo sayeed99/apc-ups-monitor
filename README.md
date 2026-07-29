@@ -474,7 +474,10 @@ apc-ups-monitor/
 
 ## License
 
-MIT License - see LICENSE file for details.
+This is free and open-source software released under the
+[MIT License](LICENSE). You may use, copy, modify, distribute, sublicense, and
+sell copies of the software. The original copyright and license notice naming
+Sayeed Afridi must remain in all copies or substantial portions.
 
 ## Contributing
 

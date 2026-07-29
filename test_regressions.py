@@ -15,6 +15,17 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 class PackageAssetTests(unittest.TestCase):
+    def test_mit_license_is_present_and_packaged(self):
+        license_text = (PACKAGE_ROOT / "LICENSE").read_text()
+        manifest = (PACKAGE_ROOT / "MANIFEST.in").read_text()
+
+        self.assertIn("Copyright (c) 2025-2026 Sayeed Afridi", license_text)
+        self.assertIn(
+            "The above copyright notice and this permission notice shall be included",
+            license_text,
+        )
+        self.assertIn("include LICENSE", manifest)
+
     def test_socketio_client_is_local_and_packaged(self):
         template = (PACKAGE_ROOT / "templates/index.html").read_text()
         manifest = (PACKAGE_ROOT / "MANIFEST.in").read_text()
