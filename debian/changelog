@@ -1,3 +1,10 @@
+apc-ups-monitor (1.17.7-1) unstable; urgency=high
+
+  * Remove remaining systemd namespace protections that implicitly force
+    NoNewPrivileges for non-root services and block restricted sudo commands
+
+ -- Sayeed Afridi <sayeed.afridi2009@gmail.comm>  Wed, 29 Jul 2026 19:15:00 +0530
+
 apc-ups-monitor (1.17.6-1) unstable; urgency=high
 
   * Remove systemd hardening directives that implicitly force NoNewPrivileges

@@ -54,7 +54,12 @@ class PackageAssetTests(unittest.TestCase):
         )
         self.assertNotIn("$INSTALL_USER ALL=", postinst)
         self.assertIn("NoNewPrivileges=false", service)
-        self.assertIn("/etc/apcupsd /etc/default", service)
+        self.assertNotIn("\nProtectSystem=", service)
+        self.assertNotIn("\nProtectHome=", service)
+        self.assertNotIn("\nPrivateDevices=", service)
+        self.assertNotIn("\nProtectKernelTunables=", service)
+        self.assertNotIn("\nProtectKernelModules=", service)
+        self.assertNotIn("\nProtectControlGroups=", service)
         self.assertNotIn("\nLockPersonality=", service)
         self.assertNotIn("\nRestrictAddressFamilies=", service)
 

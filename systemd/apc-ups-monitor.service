@@ -18,24 +18,12 @@ TimeoutStopSec=30
 Restart=always
 RestartSec=5
 
-# sudo is limited to the exact commands in /etc/sudoers.d/apc-ups-monitor.
+# The service stays unprivileged. Privileged apcupsd operations are limited to
+# the exact commands listed in /etc/sudoers.d/apc-ups-monitor.
 NoNewPrivileges=false
-PrivateTmp=true
-PrivateDevices=true
-ProtectHome=true
-ProtectSystem=strict
-ReadWritePaths=/var/lib/apc-ups-monitor /var/log/apc-ups-monitor /etc/apcupsd /etc/default
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-# RestrictRealtime=true  # Disabled for WebSocket performance
-# RestrictNamespaces=true  # Disabled for WebSocket compatibility
-# LockPersonality and RestrictAddressFamilies are intentionally omitted because
-# systemd makes NoNewPrivileges effective when they are enabled, which prevents
-# the service's tightly scoped sudo commands from updating/restarting apcupsd.
-# MemoryDenyWriteExecute=true  # Disabled - may interfere with WebSocket libraries
-# SystemCallFilter=@system-service  # Disabled for WebSocket compatibility
-# SystemCallErrorNumber=EPERM  # Disabled for WebSocket compatibility
+# Do not add systemd namespace/hardening directives here without checking
+# systemd.exec(5): many implicitly force NoNewPrivileges for User= services and
+# would disable these intentionally restricted sudo operations.
 
 # Environment
 Environment=PYTHONPATH=/usr/lib/python3/dist-packages
