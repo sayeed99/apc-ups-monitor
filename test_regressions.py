@@ -24,6 +24,14 @@ class PackageAssetTests(unittest.TestCase):
         self.assertIn("recursive-include static *", manifest)
         self.assertGreater((PACKAGE_ROOT / "static/socket.io.min.js").stat().st_size, 40_000)
 
+    def test_lucide_zap_favicon_is_local_and_packaged(self):
+        template = (PACKAGE_ROOT / "templates/index.html").read_text()
+        favicon = (PACKAGE_ROOT / "static/favicon.svg").read_text()
+
+        self.assertIn("filename='favicon.svg'", template)
+        self.assertIn('stroke="#f59e0b"', favicon)
+        self.assertIn('d="M13 2 4.5 13h7L11 22l8.5-11h-7L13 2Z"', favicon)
+
     def test_device_api_response_is_unwrapped_by_frontend(self):
         frontend = (PACKAGE_ROOT / "static/app.js").read_text()
         self.assertIn("(result.devices || [])", frontend)

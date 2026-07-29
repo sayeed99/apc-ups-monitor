@@ -1,3 +1,9 @@
+apc-ups-monitor (1.17.9-1) unstable; urgency=low
+
+  * Add a locally packaged Lucide-style Zap favicon
+
+ -- Sayeed Afridi <sayeed.afridi2009@gmail.comm>  Wed, 29 Jul 2026 19:45:00 +0530
+
 apc-ups-monitor (1.17.8-1) unstable; urgency=medium
 
   * Correct chart ordering, time windows, scaling, and transient drop artifacts
