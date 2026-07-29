@@ -27,7 +27,35 @@ Support: `sayeed.afridi2009@gmail.comm`
 
 ## Installation
 
-### Method 1: Debian Package (Recommended)
+### Install the latest GitHub release (recommended)
+
+On Debian or Ubuntu:
+
+```bash
+curl -fL \
+  https://github.com/sayeed99/apc-ups-monitor/releases/latest/download/apc-ups-monitor_latest_all.deb \
+  -o /tmp/apc-ups-monitor.deb
+sudo apt install /tmp/apc-ups-monitor.deb
+```
+
+The package enables and starts `apc-ups-monitor`. Open:
+
+```text
+http://localhost:8555
+```
+
+Verify the installation:
+
+```bash
+systemctl status apc-ups-monitor --no-pager
+apcaccess status
+```
+
+The monitor requires `apcupsd` and an APC UPS supported by `apcupsd`. Use the
+Configuration tab to select the detected APC USB or serial connection when
+automatic detection does not match the active device.
+
+### Build the Debian package from source
 
 1. Build the package:
    ```bash
@@ -41,7 +69,7 @@ Support: `sayeed.afridi2009@gmail.comm`
    sudo apt-get install -f  # Fix any dependency issues
    ```
 
-### Method 2: Local Development Installation
+### Local development installation
 
 1. Clone and install locally:
    ```bash
@@ -49,7 +77,7 @@ Support: `sayeed.afridi2009@gmail.comm`
    ./scripts/install-local.sh
    ```
 
-### Method 3: Setup Sudo Permissions (Required for Configuration Management)
+### Setup sudo permissions for configuration management
 
 If you want to use the web interface to configure apcupsd settings, you need to set up passwordless sudo permissions:
 
@@ -65,7 +93,7 @@ This script configures secure, limited sudo access for:
 
 **Note**: This step is optional if you only want monitoring (read-only) functionality.
 
-### Method 4: Complete Removal (Cleanup)
+### Complete removal
 
 To completely remove all traces of APC UPS Monitor:
 
