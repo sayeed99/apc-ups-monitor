@@ -57,6 +57,7 @@ class UPSMonitor {
         this.lastBatteryCharge = undefined;
         this.lastBatteryDataFetch = 0;
         this.isConnected = false;
+        this.isRestarting = false;
         this.charts = {};
         this.settings = {
             apiUrl: this.getApiUrl(),
@@ -304,6 +305,12 @@ class UPSMonitor {
                 return;
             }
             
+            if (data.data.stale || data.data.data_state === 'reconnecting') {
+                this.setRestartingState(true, 'Reconnecting to UPS…');
+                return;
+            }
+
+            this.setRestartingState(false);
             this.currentData = data.data;
             this.updateUI();
             this.updateLastUpdated();
@@ -319,6 +326,12 @@ class UPSMonitor {
             
             if (data.alerts && data.alerts.length > 0) {
                 this.handleAlerts(data.alerts);
+            }
+        });
+
+        this.socket.on('ups_state', (state) => {
+            if (state && state.state === 'restarting') {
+                this.setRestartingState(true, state.message || 'Restarting apcupsd…');
             }
         });
         
@@ -366,12 +379,30 @@ class UPSMonitor {
         const dot = document.getElementById('connection-dot');
         const text = document.getElementById('connection-status');
         
-        if (this.isConnected) {
+        if (this.isRestarting) {
+            dot.className = 'status-dot status-restarting';
+            text.textContent = 'Restarting…';
+        } else if (this.isConnected) {
             dot.className = 'status-dot status-online';
             text.textContent = 'Connected';
         } else {
             dot.className = 'status-dot status-offline';
             text.textContent = 'Disconnected';
+        }
+    }
+
+    setRestartingState(restarting, message = 'Restarting…') {
+        this.isRestarting = restarting;
+        this.updateConnectionStatus();
+
+        const statusText = document.getElementById('status-text');
+        const statusBadge = document.getElementById('status-badge');
+        if (restarting && statusText && statusBadge) {
+            statusText.textContent = message;
+            statusBadge.className = 'badge badge-warning';
+        } else if (!restarting && this.currentData.status && statusText && statusBadge) {
+            statusText.textContent = this.currentData.status;
+            statusBadge.className = `badge ${this.getStatusBadgeClass(this.currentData.status)}`;
         }
     }
     
@@ -384,9 +415,15 @@ class UPSMonitor {
         try {
             const response = await fetch(`${this.settings.apiUrl}/api/current`);
             if (response.ok) {
-                this.currentData = await response.json();
-                this.updateUI();
-                this.updateLastUpdated();
+                const data = await response.json();
+                if (data && !data.stale && data.data_state !== 'reconnecting') {
+                    this.currentData = data;
+                    this.setRestartingState(false);
+                    this.updateUI();
+                    this.updateLastUpdated();
+                } else {
+                    this.setRestartingState(true, 'Reconnecting to UPS…');
+                }
             }
         } catch (error) {
             debug.error('Error fetching initial data:', error);
@@ -440,6 +477,7 @@ class UPSMonitor {
     
     updateUI() {
         const data = this.currentData;
+        if (!data || data.stale || data.data_state === 'reconnecting') return;
         
         // Header info
         document.getElementById('ups-name').textContent = data.ups_name || 'Unknown UPS';
@@ -454,9 +492,9 @@ class UPSMonitor {
         statusBadge.className = `badge ${this.getStatusBadgeClass(data.status)}`;
         
         // Header metrics
-        document.getElementById('header-battery').textContent = `${data.battery_charge || 0}%`;
-        document.getElementById('header-load').textContent = `${data.load_pct || 0}%`;
-        document.getElementById('header-temp').textContent = `${data.temperature || 0}°C`;
+        document.getElementById('header-battery').textContent = `${data.battery_charge ?? '—'}%`;
+        document.getElementById('header-load').textContent = `${data.load_pct ?? '—'}%`;
+        document.getElementById('header-temp').textContent = `${data.temperature ?? '—'}°C`;
         
         // Overview tab - Battery Status
         document.getElementById('battery-charge-percent').textContent = `${data.battery_charge || 0}%`;
@@ -582,12 +620,23 @@ class UPSMonitor {
         const chartOptions = {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 250
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            normalized: true,
+            parsing: false,
             scales: {
                 x: {
                     type: 'time',
                     time: {
+                        unit: 'minute',
+                        tooltipFormat: 'PPpp',
                         displayFormats: {
-                            minute: 'HH:mm',
+                            minute: 'h:mm a',
                             hour: 'HH:mm',
                             day: 'MM/DD'
                         }
@@ -596,7 +645,9 @@ class UPSMonitor {
                         color: '#27272a'
                     },
                     ticks: {
-                        color: '#a1a1aa'
+                        color: '#a1a1aa',
+                        maxRotation: 0,
+                        autoSkipPadding: 18
                     }
                 },
                 y: {
@@ -604,13 +655,21 @@ class UPSMonitor {
                         color: '#27272a'
                     },
                     ticks: {
-                        color: '#a1a1aa'
+                        color: '#a1a1aa',
+                        maxTicksLimit: 6
                     }
                 }
             },
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    displayColors: false
+                },
+                decimation: {
+                    enabled: true,
+                    algorithm: 'min-max'
                 }
             }
         };
@@ -625,7 +684,11 @@ class UPSMonitor {
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     fill: true,
-                    tension: 0.1
+                    tension: 0.25,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    spanGaps: false
                 }]
             },
             options: {
@@ -634,8 +697,8 @@ class UPSMonitor {
                     ...chartOptions.scales,
                     y: {
                         ...chartOptions.scales.y,
-                        min: 0,
-                        max: 100
+                        suggestedMin: 80,
+                        suggestedMax: 100
                     }
                 }
             }
@@ -651,7 +714,11 @@ class UPSMonitor {
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     fill: true,
-                    tension: 0.1
+                    tension: 0.25,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    spanGaps: false
                 }]
             },
             options: {
@@ -660,8 +727,8 @@ class UPSMonitor {
                     ...chartOptions.scales,
                     y: {
                         ...chartOptions.scales.y,
-                        min: 0,
-                        max: 100
+                        beginAtZero: true,
+                        suggestedMax: 10
                     }
                 }
             }
@@ -677,7 +744,11 @@ class UPSMonitor {
                     borderColor: '#f59e0b',
                     backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     fill: false,
-                    tension: 0.1
+                    tension: 0.25,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    spanGaps: false
                 }]
             },
             options: chartOptions
@@ -693,7 +764,11 @@ class UPSMonitor {
                     borderColor: '#ef4444',
                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     fill: false,
-                    tension: 0.1
+                    tension: 0.25,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    spanGaps: false
                 }]
             },
             options: chartOptions
@@ -703,13 +778,17 @@ class UPSMonitor {
     updateCharts() {
         if (!this.historyData || this.historyData.length === 0) return;
         
-        const data = this.historyData.map(item => ({
-            x: new Date(item.timestamp),
-            battery: item.battery_charge,
-            load: item.load_pct,
-            voltage: item.line_voltage,
-            temperature: item.temperature
-        }));
+        const data = this.historyData
+            .filter(item => !item.stale && item.using_mock_data !== true)
+            .map(item => ({
+                x: new Date(item.timestamp).getTime(),
+                battery: this.validMetric(item.battery_charge, 0, 100),
+                load: this.validMetric(item.load_pct, 0, 100),
+                voltage: this.validMetric(item.line_voltage, 1),
+                temperature: this.validMetric(item.temperature, -50, 100)
+            }))
+            .filter(item => Number.isFinite(item.x))
+            .sort((a, b) => a.x - b.x);
         
         // Update battery chart
         this.charts.battery.data.datasets[0].data = data.map(d => ({
@@ -741,24 +820,21 @@ class UPSMonitor {
     }
     
     updateChartsWithRealTimeData(data) {
-        if (!this.charts.battery) return;
+        if (!this.charts.battery || !data || data.stale || data.data_state !== 'live') return;
         
         // Use current time if no timestamp is provided
-        const currentTime = data.timestamp ? new Date(data.timestamp) : new Date();
-        const maxDataPoints = 50; // Keep only last 50 data points for real-time view
+        const currentTime = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+        const cutoff = Date.now() - (Number(this.settings.timeRange) * 60 * 60 * 1000);
         
         // Update battery chart
         if (this.charts.battery) {
             const batteryData = this.charts.battery.data.datasets[0].data;
             batteryData.push({
                 x: currentTime,
-                y: data.battery_charge || 0
+                y: this.validMetric(data.battery_charge, 0, 100)
             });
             
-            // Keep only recent data points
-            if (batteryData.length > maxDataPoints) {
-                batteryData.shift();
-            }
+            this.trimChartData(batteryData, cutoff);
             
             this.charts.battery.update('none');
         }
@@ -768,12 +844,10 @@ class UPSMonitor {
             const loadData = this.charts.load.data.datasets[0].data;
             loadData.push({
                 x: currentTime,
-                y: data.load_pct || 0
+                y: this.validMetric(data.load_pct, 0, 100)
             });
             
-            if (loadData.length > maxDataPoints) {
-                loadData.shift();
-            }
+            this.trimChartData(loadData, cutoff);
             
             this.charts.load.update('none');
         }
@@ -783,12 +857,10 @@ class UPSMonitor {
             const voltageData = this.charts.voltage.data.datasets[0].data;
             voltageData.push({
                 x: currentTime,
-                y: data.line_voltage || 0
+                y: this.validMetric(data.line_voltage, 1)
             });
             
-            if (voltageData.length > maxDataPoints) {
-                voltageData.shift();
-            }
+            this.trimChartData(voltageData, cutoff);
             
             this.charts.voltage.update('none');
         }
@@ -798,14 +870,26 @@ class UPSMonitor {
             const tempData = this.charts.temperature.data.datasets[0].data;
             tempData.push({
                 x: currentTime,
-                y: data.temperature || 0
+                y: this.validMetric(data.temperature, -50, 100)
             });
             
-            if (tempData.length > maxDataPoints) {
-                tempData.shift();
-            }
+            this.trimChartData(tempData, cutoff);
             
             this.charts.temperature.update('none');
+        }
+    }
+
+    validMetric(value, min = -Infinity, max = Infinity) {
+        const number = Number(value);
+        return Number.isFinite(number) && number >= min && number <= max ? number : null;
+    }
+
+    trimChartData(points, cutoff) {
+        while (points.length && new Date(points[0].x).getTime() < cutoff) {
+            points.shift();
+        }
+        if (points.length > 5000) {
+            points.splice(0, points.length - 5000);
         }
     }
     
@@ -1318,6 +1402,7 @@ class UPSMonitor {
     }
     
     async restartApcupsd() {
+        this.setRestartingState(true, 'Restarting apcupsd…');
         try {
             const response = await fetch(`${this.settings.apiUrl}/api/apcupsd/restart`, {
                 method: 'POST',
@@ -1329,15 +1414,45 @@ class UPSMonitor {
             const result = await response.json();
             
             if (result.success) {
-                this.showNotification('apcupsd restarted successfully!', 'success');
+                this.showNotification('apcupsd restart requested; waiting for UPS data…', 'success');
                 this.loadConfigurationData(); // Refresh status
+                await this.pollForLiveData();
             } else {
+                this.setRestartingState(false);
                 this.showNotification(`Restart failed: ${result.message}`, 'error');
             }
         } catch (error) {
+            this.setRestartingState(false);
             debug.error('Error restarting apcupsd:', error);
             this.showNotification('Error restarting apcupsd', 'error');
         }
+    }
+
+    async pollForLiveData(timeoutMs = 30000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            try {
+                const response = await fetch(`${this.settings.apiUrl}/api/current`, {
+                    cache: 'no-store'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && !data.stale && data.data_state === 'live') {
+                        this.currentData = data;
+                        this.setRestartingState(false);
+                        this.updateUI();
+                        this.updateLastUpdated();
+                        return true;
+                    }
+                }
+            } catch (error) {
+                debug.warn('Waiting for apcupsd to return:', error);
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        this.setRestartingState(true, 'UPS reconnect delayed…');
+        this.showNotification('apcupsd restarted, but UPS data is still reconnecting.', 'warning');
+        return false;
     }
     
     async detectUpsDevices() {
@@ -1380,6 +1495,7 @@ class UPSMonitor {
     }
     
     async saveUpsConfiguration() {
+        this.setRestartingState(true, 'Applying configuration…');
         try {
             const config = {
                 UPSNAME: document.getElementById('config-upsname').value,
@@ -1407,12 +1523,15 @@ class UPSMonitor {
             const result = await response.json();
             
             if (result.success) {
-                this.showNotification('UPS configuration saved successfully!', 'success');
+                this.showNotification('Configuration saved; waiting for UPS data…', 'success');
                 this.loadConfigurationData(); // Refresh status
+                await this.pollForLiveData();
             } else {
+                this.setRestartingState(false);
                 this.showNotification(`Configuration failed: ${result.message}`, 'error');
             }
         } catch (error) {
+            this.setRestartingState(false);
             debug.error('Error saving configuration:', error);
             this.showNotification('Error saving configuration', 'error');
         }

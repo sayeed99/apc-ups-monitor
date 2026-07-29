@@ -1,3 +1,12 @@
+apc-ups-monitor (1.17.8-1) unstable; urgency=medium
+
+  * Correct chart ordering, time windows, scaling, and transient drop artifacts
+  * Preserve the last valid UPS telemetry while apcupsd restarts or reconnects
+  * Poll for live readings and expose clear restarting/reconnecting UI states
+  * Fix Socket.IO disconnect handling with current server versions
+
+ -- Sayeed Afridi <sayeed.afridi2009@gmail.comm>  Wed, 29 Jul 2026 19:30:00 +0530
+
 apc-ups-monitor (1.17.7-1) unstable; urgency=high
 
   * Remove remaining systemd namespace protections that implicitly force

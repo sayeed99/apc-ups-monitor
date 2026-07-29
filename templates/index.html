@@ -430,6 +430,14 @@
         .status-online { background-color: var(--success); }
         .status-battery { background-color: var(--warning); }
         .status-offline { background-color: var(--error); }
+        .status-restarting {
+            background-color: var(--warning);
+            animation: status-pulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes status-pulse {
+            50% { opacity: 0.35; transform: scale(0.8); }
+        }
         
         .chart-container {
             position: relative;

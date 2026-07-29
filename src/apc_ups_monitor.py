@@ -312,8 +312,7 @@ class UPSMonitor:
             if result.returncode != 0:
                 logger.warning(f"apcaccess failed with return code {result.returncode}")
                 logger.warning(f"Error output: {result.stderr}")
-                self.use_mock_data = True
-                return self.get_mock_data()
+                return self._temporary_unavailable_data()
             
             output = result.stdout
             
@@ -321,11 +320,13 @@ class UPSMonitor:
             data = self.parse_ups_output(output)
             
             if not data:
-                logger.warning("No data parsed from apcaccess output, using mock data")
-                self.use_mock_data = True
-                return self.get_mock_data()
+                logger.warning("No data parsed from apcaccess output")
+                return self._temporary_unavailable_data()
             
+            self.use_mock_data = False
             normalized = self.normalize_data(data)
+            normalized['data_state'] = 'live'
+            normalized['stale'] = False
             
             # Cache the result
             self.apcaccess_cache = normalized
@@ -334,17 +335,33 @@ class UPSMonitor:
             return normalized
             
         except FileNotFoundError:
-            logger.error("apcaccess command not found. Install apcupsd package. Using mock data.")
-            self.use_mock_data = True
-            return self.get_mock_data()
+            logger.error("apcaccess command not found. Install apcupsd package.")
+            return self._temporary_unavailable_data()
         except subprocess.TimeoutExpired:
-            logger.error("apcaccess command timed out. Using mock data.")
-            self.use_mock_data = True
-            return self.get_mock_data()
+            logger.warning("apcaccess command timed out")
+            return self._temporary_unavailable_data()
         except Exception as e:
-            logger.error(f"Error running apcaccess: {e}. Using mock data.")
-            self.use_mock_data = True
-            return self.get_mock_data()
+            logger.error(f"Error running apcaccess: {e}")
+            return self._temporary_unavailable_data()
+
+    def _temporary_unavailable_data(self) -> Dict[str, Any]:
+        """Preserve the last valid reading while apcupsd restarts or reconnects."""
+        if self.apcaccess_cache:
+            stale_data = dict(self.apcaccess_cache)
+            stale_data.update({
+                'data_state': 'reconnecting',
+                'stale': True,
+                'timestamp': get_local_now().isoformat()
+            })
+            return stale_data
+
+        return {
+            'status': 'RECONNECTING',
+            'data_state': 'reconnecting',
+            'stale': True,
+            'timestamp': get_local_now().isoformat(),
+            'using_mock_data': False
+        }
     
     def parse_ups_output(self, output: str) -> Dict[str, str]:
         """Parse the raw apcaccess output into key-value pairs."""
@@ -779,11 +796,12 @@ class UPSMonitor:
                 # Get current UPS data
                 self.current_data = self.parse_apcaccess_output()
                 
-                # Log to database asynchronously
-                self.log_data_to_db(self.current_data)
-                
-                # Check for alerts
-                alerts = self.check_alerts(self.current_data)
+                # Never persist or alert on a transient restart/reconnect sample.
+                if self.current_data.get('stale'):
+                    alerts = []
+                else:
+                    self.log_data_to_db(self.current_data)
+                    alerts = self.check_alerts(self.current_data)
                 
                 # Emit real-time data via WebSocket less frequently
                 current_time = time.time()
@@ -1008,13 +1026,17 @@ def create_ups_blueprint():
                 ''', (since.isoformat(),))
                 total_records = cursor.fetchone()[0]
                 
-                # Get records with proper SQL LIMIT and ORDER BY (latest first)
+                # Return the complete requested window chronologically. The
+                # browser uses Chart.js decimation for efficient rendering.
                 cursor.execute('''
-                    SELECT * FROM ups_history 
-                    WHERE timestamp > ? 
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                ''', (since.isoformat(), limit))
+                    SELECT * FROM (
+                        SELECT * FROM ups_history
+                        WHERE timestamp > ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    )
+                    ORDER BY timestamp ASC
+                ''', (since.isoformat(), min(max(limit * 10, 1000), 5000)))
                 
                 columns = [desc[0] for desc in cursor.description]
                 history = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -1376,6 +1398,11 @@ def create_ups_blueprint():
                     'error': 'No configuration data provided'
                 }), 400
             
+            if socketio:
+                socketio.emit('ups_state', {
+                    'state': 'restarting',
+                    'message': 'Applying configuration…'
+                })
             success, message = config_manager.configure_ups(config_data)
             return jsonify({
                 'success': success,
@@ -1409,6 +1436,11 @@ def create_ups_blueprint():
     def restart_apcupsd():
         """Restart apcupsd service."""
         try:
+            if socketio:
+                socketio.emit('ups_state', {
+                    'state': 'restarting',
+                    'message': 'Restarting apcupsd…'
+                })
             config_manager = ApcupsdConfigManager()
             success, message = config_manager.restart_apcupsd()
             return jsonify({
@@ -1489,9 +1521,12 @@ def register_socketio_handlers(socketio_instance):
             logger.error(f'Error sending initial data to client: {e}')
     
     @socketio_instance.on('disconnect')
-    def handle_disconnect():
+    def handle_disconnect(reason=None):
         """Handle client disconnection."""
-        logger.info(f'❌ Client disconnected: {request.sid if request else "unknown"}')
+        logger.info(
+            f'❌ Client disconnected: {request.sid if request else "unknown"} '
+            f'(reason: {reason or "unknown"})'
+        )
         
     @socketio_instance.on('connect_error') 
     def handle_connect_error(error):

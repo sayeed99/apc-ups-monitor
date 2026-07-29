@@ -11,7 +11,7 @@ vendor_wheels = glob.glob("vendor/*.whl")
 
 setup(
     name="apc-ups-monitor",
-    version="1.17.7",
+    version="1.17.8",
     description="APC UPS monitoring system with a real-time web interface",
     author="Sayeed Afridi",
     author_email="sayeed.afridi2009@gmail.comm",

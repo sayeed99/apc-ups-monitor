@@ -31,6 +31,7 @@ class PackageAssetTests(unittest.TestCase):
     def test_socketio_does_not_replace_flask_request_session(self):
         backend = (PACKAGE_ROOT / "src/apc_ups_monitor.py").read_text()
         self.assertIn("'manage_session': False", backend)
+        self.assertIn("def handle_disconnect(reason=None):", backend)
 
     def test_vendor_loader_uses_package_relative_imports(self):
         main = (PACKAGE_ROOT / "src/main.py").read_text()
@@ -71,6 +72,22 @@ class PackageAssetTests(unittest.TestCase):
         self.assertIn("/var/lib/apc-ups-monitor/staging/apcupsd.default", backend)
         self.assertNotIn("NamedTemporaryFile", backend)
         self.assertNotIn("/tmp/*.conf", postinst)
+
+    def test_charts_sort_and_reject_transient_zero_samples(self):
+        frontend = (PACKAGE_ROOT / "static/app.js").read_text()
+        backend = (PACKAGE_ROOT / "src/apc_ups_monitor.py").read_text()
+
+        self.assertIn(".sort((a, b) => a.x - b.x)", frontend)
+        self.assertIn("data.stale || data.data_state !== 'live'", frontend)
+        self.assertIn("this.validMetric(data.battery_charge, 0, 100)", frontend)
+        self.assertNotIn("y: data.battery_charge || 0", frontend)
+        self.assertIn("ORDER BY timestamp ASC", backend)
+
+    def test_temporary_apcupsd_failure_preserves_last_reading(self):
+        backend = (PACKAGE_ROOT / "src/apc_ups_monitor.py").read_text()
+        self.assertIn("stale_data = dict(self.apcaccess_cache)", backend)
+        self.assertIn("'data_state': 'reconnecting'", backend)
+        self.assertIn("if self.current_data.get('stale'):", backend)
 
 
 class ApcupsdDeviceTests(unittest.TestCase):
